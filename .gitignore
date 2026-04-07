@@ -1,0 +1,8 @@
+build/
+build_release/
+__pycache__/
+.vscode/
+.codex
+*.pyc
+receding_log.csv
+waypoints.csv
