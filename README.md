@@ -1,6 +1,8 @@
 # RotaOptimaldsCpp
 
-`Fresnel/RotaOptimalds.py` akışının C++/CasADi sürümü.
+C++/CasADi implementation of the `Fresnel/RotaOptimalds.py` workflow.
+
+This project solves receding-horizon route optimization with waypoint tracking and obstacle avoidance, and exports the results as CSV files for post-processing and plotting.
 
 ## Build
 
@@ -9,7 +11,7 @@ cmake -S . -B build
 cmake --build build -j
 ```
 
-`CASADI_ROOT` vererek CasADi kök klasörünü belirleyebilirsin:
+You can specify the CasADi root directory with `CASADI_ROOT`:
 
 ```bash
 cmake -S . -B build -DCASADI_ROOT=/path/to/casadi
@@ -21,9 +23,9 @@ cmake -S . -B build -DCASADI_ROOT=/path/to/casadi
 ./build/rota_optimal_ds
 ```
 
-Çalışma sonunda `receding_log.csv` ve `waypoints.csv` üretilir.
+After execution, the program generates `receding_log.csv` and `waypoints.csv`.
 
-CLI ile senaryo dosyası vererek:
+To run with a scenario file from the CLI:
 
 ```bash
 ./build/rota_optimal_ds \
@@ -32,24 +34,24 @@ CLI ile senaryo dosyası vererek:
   --out-wp waypoints.csv
 ```
 
-Yardım:
+Help:
 
 ```bash
 ./build/rota_optimal_ds --help
 ```
 
-> Not: Sisteminizde `ipopt` plugin'i yoksa kod otomatik `sqpmethod` fallback kullanır.
-> Python ile birebir davranış için `ipopt` kurulumu önerilir.
+> Note: If the `ipopt` plugin is not available on your system, the code automatically falls back to `sqpmethod`.
+> For behavior closer to the Python version, installing `ipopt` is recommended.
 
-## Windows Hazırlık
+## Windows Setup
 
-### 1) Gerekenler
+### 1. Requirements
 
-- Visual Studio 2022 (Desktop development with C++)
-- CMake (>=3.16)
-- CasADi C++ dağıtımı (içinde `include/`, `lib/` veya `bin/` olmalı)
+- Visual Studio 2022 with Desktop development with C++
+- CMake 3.16 or newer
+- CasADi C++ distribution containing `include/`, `lib/`, or `bin/`
 
-Önerilen klasör yapısı:
+Recommended folder layout:
 
 ```text
 RotaOptimaldsCpp/
@@ -60,7 +62,7 @@ RotaOptimaldsCpp/
       bin/
 ```
 
-### 2) Build (PowerShell)
+### 2. Build (PowerShell)
 
 ```powershell
 cd C:\path\to\RotaOptimaldsCpp
@@ -68,22 +70,22 @@ cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCASADI_ROOT="$PWD\\third
 cmake --build build --config Release
 ```
 
-### 3) Run
+### 3. Run
 
 ```powershell
 .\build\Release\rota_optimal_ds.exe --scenario .\scenarios\rotaoptimalds_default.ini
 ```
 
-`ROTA_COPY_CASADI_RUNTIME=ON` (default) ise CMake, CasADi ile ilgili DLL'leri exe yanına kopyalamaya çalışır.
+If `ROTA_COPY_CASADI_RUNTIME=ON` (default), CMake tries to copy CasADi-related DLLs next to the executable.
 
-### 4) Dağıtım İçin Tek Klasör
+### 4. Single-Folder Distribution
 
 ```powershell
 cmake --install build --config Release --prefix .\dist
 ```
 
-`dist` klasörünü zipleyip diğer Windows makineye taşıyabilirsin.
-Gerekirse hedef makinede `vcruntime` eksikse Visual C++ Redistributable kur.
+You can zip the `dist` folder and move it to another Windows machine.
+If the target machine is missing `vcruntime`, install the Visual C++ Redistributable.
 
 ## Plot
 
@@ -91,34 +93,32 @@ Gerekirse hedef makinede `vcruntime` eksikse Visual C++ Redistributable kur.
 python3 plot_receding.py --log receding_log.csv --wp waypoints.csv --scenario scenarios/rotaoptimalds_obstacle.ini
 ```
 
-## Scenario Dosyasi
+## Scenario File
 
-- Varsayılan örnek: `scenarios/rotaoptimalds_default.ini`
-- `waypoint` satırı formatı:
+- Default example: `scenarios/rotaoptimalds_default.ini`
+- `waypoint` line format:
   `waypoint = X,Y,psig,Kf,tol,use_Kf,w_wp,hit_scale`
-- `obstacle` satırı formatı:
+- `obstacle` line format:
   `obstacle = cx,cy,radius[,enabled]`
-- Birden fazla engel icin `obstacle` satırını tekrar edebilirsin.
-- Toplu yükleme icin:
+- For multiple obstacles, repeat the `obstacle` line.
+- For batch loading:
   `obstacles_csv = scenarios/obstacles_many.csv`
-  CSV formatı: `cx,cy,radius[,enabled]` (header opsiyonel)
-- Engel kacınma ayarları:
+  CSV format: `cx,cy,radius[,enabled]` (header optional)
+- Obstacle-avoidance settings:
   `enable_obstacle_avoidance`, `obstacle_clearance`, `obstacle_trigger_margin`, `obstacle_waypoint_tol`
-- Boş/opsiyonel alanlar için `none` veya boş değer kullanabilirsin.
-- Örnek engel senaryosu: `scenarios/rotaoptimalds_obstacle.ini`
+- For empty or optional fields, use `none` or leave them blank.
+- Example obstacle scenario: `scenarios/rotaoptimalds_obstacle.ini`
 
-## İçerik
+## Contents
 
 - `src/rota_optimal_ds.hpp/.cpp`
-  - MPC modeli (Opti + IPOPT)
-  - clothoid dynamics + fixed-ramp `K` güncellemesi
-  - multi-waypoint receding-horizon döngüsü
-  - warm-start/solution shift mantığı
+  - MPC model (Opti + IPOPT)
+  - Clothoid dynamics with fixed-ramp `K` update
+  - Multi-waypoint receding-horizon loop
+  - Warm-start and solution-shift logic
 - `src/main.cpp`
-  - CLI + scenario dosyasından çalışma
+  - CLI entry point and scenario-file based execution
 - `src/scenario_parser.hpp/.cpp`
-  - ini tarzı scenario parser
+  - INI-style scenario parser
 - `plot_receding.py`
-  - C++ çıktısından Python'daki 2x2 grafik setini üretir
-# RotaOptimaldsCpp
-# RotaOptimaldsCpp
+  - Generates the Python 2x2 plot set from C++ output
