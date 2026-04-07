@@ -307,9 +307,16 @@ python3 plot_receding.py \
 
 ## Example Output
 
-Obstacle-free example generated from `scenarios/rotaoptimalds_default.ini`:
+Example CLI output generated from `scenarios/rotaoptimalds_default.ini`:
 
-![Example default plot](docs/plot_default_example.png)
+```text
+CasADi solve time: 0.053 s
+Terminal [x,y,psi,K] = [-0.216, 0.108, 6.254, 0.030]
+Scenario source: scenarios/rotaoptimalds_default.ini
+Saved logs: receding_log.csv, waypoints.csv
+Active WP index: 3
+Average solve time [s]: 0.076
+```
 
 Obstacle-avoidance example generated from `scenarios/rotaoptimalds_obstacle.ini`:
 
