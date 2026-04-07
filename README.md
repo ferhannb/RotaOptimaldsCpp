@@ -43,15 +43,15 @@ Compared with a one-shot open-loop trajectory generator, the receding-horizon st
 
 The state used by the optimizer is:
 
-$$
+```math
 \mathbf{x}_k =
 \begin{bmatrix}
 x_k \\
 y_k \\
 \psi_k \\
 K_k
-\end{bmatrix},
-$$
+\end{bmatrix}
+```
 
 where:
 
@@ -66,34 +66,34 @@ The optimization variables at each horizon step are:
 
 The step length is bounded:
 
-$$
-ds_{\min} \le ds_k \le ds_{\max}.
-$$
+```math
+ds_{\min} \le ds_k \le ds_{\max}
+```
 
 The commanded curvature and actual curvature are also bounded:
 
-$$
-|K^{cmd}_k| \le K_{\max}, \qquad |K_k| \le K_{\max}.
-$$
+```math
+|K^{cmd}_k| \le K_{\max}, \qquad |K_k| \le K_{\max}
+```
 
 ### Curvature Update
 
 Instead of changing curvature instantaneously, the solver uses a rate-limited ramp:
 
-$$
-K_{k+1} = K_k + \Delta K_k,
-$$
+```math
+K_{k+1} = K_k + \Delta K_k
+```
 
 with
 
-$$
+```math
 \Delta K_k =
 \left(\frac{K_{\max}}{S_{\max}} ds_k\right)
 \tanh\left(
 \frac{K^{cmd}_k - K_k}
 {\left(\frac{K_{\max}}{S_{\max}} ds_k\right) + \varepsilon}
-\right).
-$$
+\right)
+```
 
 This gives a smooth saturation law for curvature evolution. In practical terms, $S_{\max}$ controls how quickly curvature can change along arc length.
 
@@ -101,11 +101,11 @@ This gives a smooth saturation law for curvature evolution. In practical terms, 
 
 For each horizon step, the motion model integrates the state using a short clothoid-like segment. In simplified continuous form:
 
-$$
+```math
 \frac{dx}{ds} = \cos \psi, \qquad
 \frac{dy}{ds} = \sin \psi, \qquad
-\frac{d\psi}{ds} = K.
-$$
+\frac{d\psi}{ds} = K
+```
 
 Inside the implementation, each step is numerically integrated over small subsegments using CasADi expressions and a sinc-based update for better behavior near zero curvature.
 
@@ -115,7 +115,7 @@ The solver minimizes a weighted combination of control effort, smoothness, waypo
 
 A simplified form of the objective is:
 
-$$
+```math
 J =
 \sum_{k=0}^{N-1}
 \left(
@@ -135,31 +135,31 @@ J_{wp}
 +
 J_{hit}
 +
-J_{term}.
-$$
+J_{term}
+```
 
 The terminal term penalizes final position, heading, and curvature error:
 
-$$
-J_{term} $$
+```math
+J_{term}
 =
 \lambda_{term}
 \left(
 w_{pos}\|\mathbf{p}_N - \mathbf{p}_g\|^2
 + w_{\psi}\,\mathrm{wrap}(\psi_N - \psi_g)^2
 + w_{K_f}(K_N - K_f)^2
-\right).
-$$
+\right)
+```
 
 The waypoint-attraction term encourages the predicted path to stay near a selected waypoint over the horizon:
 
-$$
+```math
 J_{wp}
 =
 w_{wp}
 \sum_{k=1}^{N}
-\|\mathbf{p}_k - \mathbf{p}_{wp}\|^2.
-$$
+\|\mathbf{p}_k - \mathbf{p}_{wp}\|^2
+```
 
 There is also an optional intermediate "hit" term applied at a configurable horizon index. This helps shape intermediate waypoint behavior before the final target becomes dominant.
 
