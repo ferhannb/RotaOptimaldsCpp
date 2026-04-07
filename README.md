@@ -141,7 +141,7 @@ $$
 The terminal term penalizes final position, heading, and curvature error:
 
 $$
-J_{term}
+J_{term} $$
 =
 \lambda_{term}
 \left(
