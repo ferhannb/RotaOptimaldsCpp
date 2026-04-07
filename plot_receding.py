@@ -70,6 +70,8 @@ def main():
     p.add_argument("--log", default="receding_log.csv")
     p.add_argument("--wp", default="waypoints.csv")
     p.add_argument("--scenario", default=None, help="scenario ini path (for obstacle circles)")
+    p.add_argument("--save", default=None, help="save plot to an image file")
+    p.add_argument("--no-show", action="store_true", help="do not open an interactive plot window")
     args = p.parse_args()
 
     log = load_csv(args.log)
@@ -247,7 +249,11 @@ def main():
     ax.set_ylabel("ds [m]")
     ax.set_title("Step length profile")
 
-    plt.show()
+    if args.save:
+        fig.savefig(args.save, dpi=180, bbox_inches="tight")
+
+    if not args.no_show:
+        plt.show()
 
 
 if __name__ == "__main__":

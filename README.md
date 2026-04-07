@@ -93,6 +93,23 @@ If the target machine is missing `vcruntime`, install the Visual C++ Redistribut
 python3 plot_receding.py --log receding_log.csv --wp waypoints.csv --scenario scenarios/rotaoptimalds_obstacle.ini
 ```
 
+To save the plot directly to an image file without opening a window:
+
+```bash
+python3 plot_receding.py \
+  --log receding_log.csv \
+  --wp waypoints.csv \
+  --scenario scenarios/rotaoptimalds_obstacle.ini \
+  --save docs/plot_obstacle_example.png \
+  --no-show
+```
+
+## Example Output
+
+Example 2x2 plot generated from `scenarios/rotaoptimalds_obstacle.ini`:
+
+![Example obstacle plot](docs/plot_obstacle_example.png)
+
 ## Scenario File
 
 - Default example: `scenarios/rotaoptimalds_default.ini`
