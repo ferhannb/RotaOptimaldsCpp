@@ -318,6 +318,10 @@ Active WP index: 3
 Average solve time [s]: 0.076
 ```
 
+Plot generated from `scenarios/rotaoptimalds_default.ini`:
+
+![Example default plot](docs/plot_default_example.png)
+
 Obstacle-avoidance example generated from `scenarios/rotaoptimalds_obstacle.ini`:
 
 ![Example obstacle plot](docs/plot_obstacle_example.png)
