@@ -307,7 +307,11 @@ python3 plot_receding.py \
 
 ## Example Output
 
-Example 2x2 plot generated from `scenarios/rotaoptimalds_obstacle.ini`:
+Obstacle-free example generated from `scenarios/rotaoptimalds_default.ini`:
+
+![Example default plot](docs/plot_default_example.png)
+
+Obstacle-avoidance example generated from `scenarios/rotaoptimalds_obstacle.ini`:
 
 ![Example obstacle plot](docs/plot_obstacle_example.png)
 
