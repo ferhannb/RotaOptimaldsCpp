@@ -320,7 +320,7 @@ Average solve time [s]: 0.076
 
 Plot generated from `scenarios/rotaoptimalds_default.ini`:
 
-![Example default plot](docs/plot_default_example.png)
+![Example default plot](docs/plot_default_scenario.png)
 
 Obstacle-avoidance example generated from `scenarios/rotaoptimalds_obstacle.ini`:
 
