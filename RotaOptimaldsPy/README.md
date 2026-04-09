@@ -72,6 +72,16 @@ python3 RotaOptimaldsPy/plot_receding.py \
 - `rotaoptimalds_obstacle_alt.ini`: denser obstacle-avoidance example
 - `rotaoptimalds_samepoint_reverse_heading.ini`: same-position reverse-heading case
 
+## Example Outputs
+
+No-obstacle waypoint tracking:
+
+![No-obstacle trajectory](docs/plot_default_alt.png)
+
+Obstacle-avoidance example:
+
+![Obstacle-avoidance trajectory](docs/plot_obstacle_alt.png)
+
 ## Notes
 
 - The Python and C++ versions are algorithmically aligned, but small numerical differences can still appear because of runtime and solver details.
