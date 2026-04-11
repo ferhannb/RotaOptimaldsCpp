@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
@@ -65,19 +66,7 @@ def unique_detour_points(detour_x, detour_y, detour_obs):
     return out
 
 
-def main():
-    p = argparse.ArgumentParser()
-    p.add_argument("--log", default="receding_log.csv")
-    p.add_argument("--wp", default="waypoints.csv")
-    p.add_argument("--scenario", default=None, help="scenario ini path (for obstacle circles)")
-    p.add_argument("--save", default=None, help="save plot to an image file")
-    p.add_argument("--no-show", action="store_true", help="do not open an interactive plot window")
-    args = p.parse_args()
-
-    log = load_csv(args.log)
-    wp = load_csv(args.wp)
-    obstacles, clearance = parse_scenario_obstacles(args.scenario)
-
+def prepare_log_series(log):
     traj = np.column_stack((log["x"], log["y"]))
     psi_arr = np.arctan2(np.sin(log["psi"]), np.cos(log["psi"]))
     K_arr = log["K"]
@@ -86,11 +75,8 @@ def main():
     idx_arr = log["wp_index"].astype(int)
 
     names = log.dtype.names if log.dtype.names is not None else ()
-    has_detour_cols = (
-        "detour_wp_x" in names and "detour_wp_y" in names and "detour_obs_idx" in names
-    )
     detour_pts = []
-    if has_detour_cols:
+    if "detour_wp_x" in names and "detour_wp_y" in names and "detour_obs_idx" in names:
         detour_pts = unique_detour_points(
             log["detour_wp_x"],
             log["detour_wp_y"],
@@ -104,7 +90,8 @@ def main():
     wp_start_step = {}
     if idx_arr.size > 0:
         idx_steps = idx_arr[1:] if idx_arr.size > 1 else np.array([], dtype=int)
-        for i in range(len(wp)):
+        max_wp = int(np.max(idx_arr)) if idx_arr.size > 0 else -1
+        for i in range(max_wp + 1):
             hits_state = np.where(idx_arr == i)[0]
             if hits_state.size > 0:
                 wp_start_state[i] = int(hits_state[0])
@@ -112,11 +99,73 @@ def main():
             if hits_step.size > 0:
                 wp_start_step[i] = int(hits_step[0])
 
+    return {
+        "traj": traj,
+        "psi_arr": psi_arr,
+        "K_arr": K_arr,
+        "Kcmd_arr": Kcmd_arr,
+        "ds_arr": ds_arr,
+        "idx_arr": idx_arr,
+        "detour_pts": detour_pts,
+        "s_grid": s_grid,
+        "s_cmd": s_cmd,
+        "wp_start_state": wp_start_state,
+        "wp_start_step": wp_start_step,
+    }
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("--log", default="receding_log.csv")
+    p.add_argument("--log-overlay", default=None, help="second log to overlay on the same plots")
+    p.add_argument("--wp", default="waypoints.csv")
+    p.add_argument("--scenario", default=None, help="scenario ini path (for obstacle circles)")
+    p.add_argument("--label", default=None, help="legend label for the primary log")
+    p.add_argument("--overlay-label", default=None, help="legend label for the overlay log")
+    p.add_argument("--save", default=None, help="save plot to an image file")
+    p.add_argument("--no-show", action="store_true", help="do not open an interactive plot window")
+    args = p.parse_args()
+
+    log = load_csv(args.log)
+    log_overlay = load_csv(args.log_overlay) if args.log_overlay else None
+    wp = load_csv(args.wp)
+    obstacles, clearance = parse_scenario_obstacles(args.scenario)
+
+    main_series = prepare_log_series(log)
+    overlay_series = prepare_log_series(log_overlay) if log_overlay is not None else None
+    primary_label = args.label if args.label else os.path.splitext(os.path.basename(args.log))[0]
+    overlay_label = None
+    if args.log_overlay:
+        overlay_label = (
+            args.overlay_label
+            if args.overlay_label
+            else os.path.splitext(os.path.basename(args.log_overlay))[0]
+        )
+
     fig, axes = plt.subplots(2, 2, figsize=(12, 9), constrained_layout=True)
 
     ax = axes[0, 0]
-    ax.plot(traj[:, 0], traj[:, 1], marker="o")
-    ax.scatter([traj[0, 0], traj[-1, 0]], [traj[0, 1], traj[-1, 1]], marker="x")
+    traj = main_series["traj"]
+    ax.plot(traj[:, 0], traj[:, 1], marker="o", markersize=3.5, linewidth=1.8, label=primary_label, color="tab:blue")
+    ax.scatter([traj[0, 0], traj[-1, 0]], [traj[0, 1], traj[-1, 1]], marker="x", color="tab:blue")
+    if overlay_series is not None:
+        traj_overlay = overlay_series["traj"]
+        ax.plot(
+            traj_overlay[:, 0],
+            traj_overlay[:, 1],
+            marker="s",
+            markersize=3.0,
+            linewidth=1.6,
+            alpha=0.85,
+            label=overlay_label,
+            color="tab:red",
+        )
+        ax.scatter(
+            [traj_overlay[0, 0], traj_overlay[-1, 0]],
+            [traj_overlay[0, 1], traj_overlay[-1, 1]],
+            marker="x",
+            color="tab:red",
+        )
     ax.scatter(wp["X"], wp["Y"], marker="*", s=120)
     for i, (cx, cy, r, enabled) in enumerate(obstacles):
         if not enabled:
@@ -146,7 +195,7 @@ def main():
 
     detour_labeled = False
     candidate_labeled = False
-    for k, (obs_idx, dx, dy) in enumerate(detour_pts):
+    for k, (obs_idx, dx, dy) in enumerate(main_series["detour_pts"]):
         ax.scatter(
             [dx],
             [dy],
@@ -184,11 +233,11 @@ def main():
                 candidate_labeled = True
 
     for i in range(len(wp)):
-        seg = idx_arr == i
+        seg = main_series["idx_arr"] == i
         if seg.any():
             seg_traj = traj[seg]
             n_pts = int(np.count_nonzero(seg))
-            ax.plot(seg_traj[:, 0], seg_traj[:, 1], linewidth=2, alpha=0.5)
+            ax.plot(seg_traj[:, 0], seg_traj[:, 1], linewidth=2, alpha=0.5, color="tab:blue")
             mid = seg_traj[n_pts // 2]
             ax.annotate(
                 f"WP{i} n={n_pts}",
@@ -198,8 +247,8 @@ def main():
                 fontsize=8,
                 bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="gray", alpha=0.8),
             )
-            if i in wp_start_state:
-                k0 = wp_start_state[i]
+            if i in main_series["wp_start_state"]:
+                k0 = main_series["wp_start_state"][i]
                 ax.annotate(
                     f"WP{i}",
                     (traj[k0, 0], traj[k0, 1]),
@@ -214,15 +263,39 @@ def main():
     ax.set_xlabel("x [m]")
     ax.set_ylabel("y [m]")
     ax.set_title("XY trajectory (Receding Horizon)")
-    if obstacles or detour_pts:
+    if obstacles or main_series["detour_pts"] or overlay_series is not None:
         ax.legend(loc="best")
 
     ax = axes[0, 1]
-    ax.plot(s_grid, K_arr, marker="o", label="K (state)")
-    ax.plot(s_cmd, Kcmd_arr, "x--", label="K_cmd")
-    for i, k0 in wp_start_state.items():
-        if 0 <= k0 < len(K_arr):
-            ax.annotate(f"WP{i}", (s_grid[k0], K_arr[k0]), xytext=(5, 5), textcoords="offset points", fontsize=8, fontweight="bold")
+    ax.plot(main_series["s_grid"], main_series["K_arr"], marker="o", markersize=3.5, label=f"{primary_label} K", color="tab:blue")
+    ax.plot(main_series["s_cmd"], main_series["Kcmd_arr"], "x--", label=f"{primary_label} K_cmd", color="tab:blue", alpha=0.8)
+    if overlay_series is not None:
+        ax.plot(
+            overlay_series["s_grid"],
+            overlay_series["K_arr"],
+            marker="s",
+            markersize=3.0,
+            label=f"{overlay_label} K",
+            color="tab:red",
+        )
+        ax.plot(
+            overlay_series["s_cmd"],
+            overlay_series["Kcmd_arr"],
+            "--",
+            label=f"{overlay_label} K_cmd",
+            color="tab:red",
+            alpha=0.8,
+        )
+    for i, k0 in main_series["wp_start_state"].items():
+        if 0 <= k0 < len(main_series["K_arr"]):
+            ax.annotate(
+                f"WP{i}",
+                (main_series["s_grid"][k0], main_series["K_arr"][k0]),
+                xytext=(5, 5),
+                textcoords="offset points",
+                fontsize=8,
+                fontweight="bold",
+            )
     ax.grid(True)
     ax.legend()
     ax.set_xlabel("s [m]")
@@ -230,21 +303,56 @@ def main():
     ax.set_title("Curvature profile")
 
     ax = axes[1, 0]
-    ax.plot(s_grid, psi_arr, marker="o")
-    for i, k0 in wp_start_state.items():
-        if 0 <= k0 < len(psi_arr):
-            ax.annotate(f"WP{i}", (s_grid[k0], psi_arr[k0]), xytext=(5, 5), textcoords="offset points", fontsize=8, fontweight="bold")
+    ax.plot(main_series["s_grid"], main_series["psi_arr"], marker="o", markersize=3.5, label=primary_label, color="tab:blue")
+    if overlay_series is not None:
+        ax.plot(
+            overlay_series["s_grid"],
+            overlay_series["psi_arr"],
+            marker="s",
+            markersize=3.0,
+            label=overlay_label,
+            color="tab:red",
+        )
+    for i, k0 in main_series["wp_start_state"].items():
+        if 0 <= k0 < len(main_series["psi_arr"]):
+            ax.annotate(
+                f"WP{i}",
+                (main_series["s_grid"][k0], main_series["psi_arr"][k0]),
+                xytext=(5, 5),
+                textcoords="offset points",
+                fontsize=8,
+                fontweight="bold",
+            )
     ax.grid(True)
+    if overlay_series is not None:
+        ax.legend()
     ax.set_xlabel("s [m]")
     ax.set_ylabel("psi [rad]")
     ax.set_title("Heading vs s")
 
     ax = axes[1, 1]
-    ax.step(s_cmd, ds_arr, where="post")
-    for i, k0 in wp_start_step.items():
-        if 0 <= k0 < len(ds_arr):
-            ax.annotate(f"WP{i}", (s_cmd[k0], ds_arr[k0]), xytext=(5, 5), textcoords="offset points", fontsize=8, fontweight="bold")
+    ax.step(main_series["s_cmd"], main_series["ds_arr"], where="post", label=primary_label, color="tab:blue")
+    if overlay_series is not None:
+        ax.step(
+            overlay_series["s_cmd"],
+            overlay_series["ds_arr"],
+            where="post",
+            label=overlay_label,
+            color="tab:red",
+        )
+    for i, k0 in main_series["wp_start_step"].items():
+        if 0 <= k0 < len(main_series["ds_arr"]):
+            ax.annotate(
+                f"WP{i}",
+                (main_series["s_cmd"][k0], main_series["ds_arr"][k0]),
+                xytext=(5, 5),
+                textcoords="offset points",
+                fontsize=8,
+                fontweight="bold",
+            )
     ax.grid(True)
+    if overlay_series is not None:
+        ax.legend()
     ax.set_xlabel("s [m]")
     ax.set_ylabel("ds [m]")
     ax.set_title("Step length profile")

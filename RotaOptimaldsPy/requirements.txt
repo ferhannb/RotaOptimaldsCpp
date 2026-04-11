@@ -1,3 +1,4 @@
-casadi
+casadi>=3.6
 numpy
 matplotlib
+acados_template
