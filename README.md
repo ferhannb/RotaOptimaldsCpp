@@ -75,6 +75,14 @@ python3 RotaOptimaldsPy/plot_receding.py \
   --scenario scenarios/rotaoptimalds_default.ini
 ```
 
+Default closed-loop result:
+
+![C++ default scenario](docs/plot_default_scenario.png)
+
+Obstacle-avoidance result:
+
+![C++ obstacle scenario](docs/plot_obstacle_example.png)
+
 ## Python Version
 
 The Python-specific guide is here:
