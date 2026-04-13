@@ -84,7 +84,7 @@ python3 plot_receding.py \
   --overlay-label acados \
   --wp waypoints.csv \
   --scenario scenarios/rotaoptimalds_obstacle_alt.ini \
-  --save overlay_receding_plot.png \
+  --save docs/overlay_receding_plot.png \
   --no-show
 ```
 
@@ -93,7 +93,50 @@ Plot solver-speed comparison:
 ```bash
 python3 compare_solver_speed.py \
   --scenario scenarios/rotaoptimalds_obstacle_alt.ini \
-  --save solver_speed_comparison.png \
+  --save docs/solver_speed_comparison.png \
+  --no-show
+```
+
+## Benchmark
+
+The `acados` vs `casadi` comparison belongs to the Python backend layer, because both solvers execute the same Python MPC formulation with different optimization backends.
+
+Recommended workflow:
+
+- run the same scenario once with `--solver casadi`
+- run it again with `--solver acados`
+- overlay the closed-loop trajectories
+- compare per-step solve times with `compare_solver_speed.py`
+
+Benchmark scenario used in the example figures below:
+
+- `scenarios/rotaoptimalds_obstacle_alt.ini`
+
+Benchmark hardware used for the figures below:
+
+- CPU: 11th Gen Intel Core i7-11800H @ 2.30 GHz
+- RAM: 15 GiB visible to the OS
+
+Trajectory overlay command:
+
+```bash
+python3 plot_receding.py \
+  --log receding_log_casadi.csv \
+  --label CasADi \
+  --log-overlay receding_log_acados.csv \
+  --overlay-label acados \
+  --wp waypoints.csv \
+  --scenario scenarios/rotaoptimalds_obstacle_alt.ini \
+  --save docs/overlay_receding_plot.png \
+  --no-show
+```
+
+Speed-comparison command:
+
+```bash
+python3 compare_solver_speed.py \
+  --scenario scenarios/rotaoptimalds_obstacle_alt.ini \
+  --save docs/solver_speed_comparison.png \
   --no-show
 ```
 
@@ -101,11 +144,11 @@ python3 compare_solver_speed.py \
 
 Trajectory overlay for the same scenario solved with `CasADi` and `acados`:
 
-![Trajectory overlay](overlay_receding_plot.png)
+![Trajectory overlay](docs/overlay_receding_plot.png)
 
 Solver-speed comparison for the same scenario:
 
-![Solver speed comparison](solver_speed_comparison.png)
+![Solver speed comparison](docs/solver_speed_comparison.png)
 
 ## Repository Contents
 

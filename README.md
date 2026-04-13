@@ -96,10 +96,15 @@ python3 RotaOptimaldsPy/main.py --solver casadi --scenario RotaOptimaldsPy/scena
 python3 RotaOptimaldsPy/main.py --solver acados --scenario RotaOptimaldsPy/scenarios/rotaoptimalds_obstacle_alt.ini
 ```
 
-Example Python outputs:
+Python backend benchmark details and figures are documented in:
 
-- [Trajectory overlay](RotaOptimaldsPy/overlay_receding_plot.png)
-- [Solver speed comparison](RotaOptimaldsPy/solver_speed_comparison.png)
+- [`RotaOptimaldsPy/README.md`](RotaOptimaldsPy/README.md)
+
+That includes:
+
+- `CasADi` vs `acados` trajectory overlay
+- per-step solve-time comparison
+- commands used to reproduce the benchmark figures
 
 ## Notes
 
