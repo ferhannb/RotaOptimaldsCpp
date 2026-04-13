@@ -1,13 +1,19 @@
+#include "colreg_scenarios.hpp"
 #include "scenario_parser.hpp"
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
 
 namespace {
+double wrap_to_pi_np(double a) {
+  return std::atan2(std::sin(a), std::cos(a));
+}
+
 std::string trim(const std::string& s) {
   const auto b = s.find_first_not_of(" \t\r\n");
   if (b == std::string::npos) {
@@ -91,6 +97,124 @@ std::vector<int> parse_int_list(const std::string& s) {
   return out;
 }
 
+Waypoint make_waypoint(
+    double x,
+    double y,
+    std::optional<double> psig,
+    std::optional<double> Kf,
+    std::optional<double> tol,
+    bool use_Kf,
+    std::optional<double> w_wp,
+    std::optional<double> hit_scale) {
+  Waypoint wp;
+  wp.X = x;
+  wp.Y = y;
+  wp.psig = psig;
+  wp.Kf = Kf;
+  wp.tol = tol;
+  wp.use_Kf = use_Kf;
+  wp.w_wp = w_wp;
+  wp.hit_scale = hit_scale;
+  return wp;
+}
+
+std::tuple<double, double, double> advance_arc(
+    double x,
+    double y,
+    double psi,
+    double radius,
+    double dpsi) {
+  if (std::abs(dpsi) < 1e-12) {
+    return {x, y, psi};
+  }
+  const double k = ((dpsi > 0.0) ? 1.0 : -1.0) / radius;
+  const double psi1 = wrap_to_pi_np(psi + dpsi);
+  const double x1 = x + (std::sin(psi + dpsi) - std::sin(psi)) / k;
+  const double y1 = y - (std::cos(psi + dpsi) - std::cos(psi)) / k;
+  return {x1, y1, psi1};
+}
+
+std::vector<Waypoint> build_williamson_waypoints(const ScenarioSpec& s) {
+  if (s.waypoints.size() != 1) {
+    throw std::runtime_error("Williamson maneuver requires exactly one final waypoint.");
+  }
+
+  const Waypoint& final_wp = s.waypoints.front();
+  if (!final_wp.psig.has_value()) {
+    throw std::runtime_error("Williamson maneuver requires final waypoint heading (psig).");
+  }
+
+  const double dpsi = wrap_to_pi_np(*final_wp.psig - s.initial_state.psi);
+  if (std::abs(std::abs(dpsi) - M_PI) > 20.0 * M_PI / 180.0) {
+    throw std::runtime_error("Williamson maneuver requires final heading to be approximately 180 degrees from the start heading.");
+  }
+
+  int turn_sign = 1;
+  if (s.turn_dir == "starboard" || s.turn_dir == "right") {
+    turn_sign = -1;
+  } else if (s.turn_dir == "port" || s.turn_dir == "left") {
+    turn_sign = 1;
+  } else if (s.turn_dir == "auto") {
+    turn_sign = (dpsi < 0.0) ? -1 : 1;
+  } else {
+    throw std::runtime_error("Invalid turn_dir: " + s.turn_dir);
+  }
+
+  const double R_auto = std::max(2.0, 1.0 / std::max(s.cfg.K_MAX, 1e-6));
+  const double R = s.maneuver_radius.has_value() ? *s.maneuver_radius : R_auto;
+  if (R <= 0.0) {
+    throw std::runtime_error("maneuver_radius must be > 0");
+  }
+
+  const double psi0 = s.initial_state.psi;
+  const double ux = std::cos(psi0);
+  const double uy = std::sin(psi0);
+  const double tol_mid = std::max({3.0, 0.25 * R, final_wp.tol.value_or(s.opts.tol_default)});
+
+  double x1, y1, psi1;
+  std::tie(x1, y1, psi1) = advance_arc(
+      s.initial_state.x,
+      s.initial_state.y,
+      psi0,
+      R,
+      turn_sign * 60.0 * M_PI / 180.0);
+
+  double x2, y2, psi2;
+  std::tie(x2, y2, psi2) = advance_arc(
+      x1,
+      y1,
+      psi1,
+      R,
+      -turn_sign * 220.0 * M_PI / 180.0);
+
+  const double along2 =
+      (x2 - s.initial_state.x) * ux +
+      (y2 - s.initial_state.y) * uy;
+  const double return_margin = std::max(1.5 * R, 8.0);
+  const double along3 = along2 - return_margin;
+  const double x3 = s.initial_state.x + along3 * ux;
+  const double y3 = s.initial_state.y + along3 * uy;
+  const double psi3 = wrap_to_pi_np(psi0 + M_PI);
+
+  std::vector<Waypoint> out;
+  out.reserve(3);
+  out.push_back(make_waypoint(x1, y1, psi1, 0.0, tol_mid, false, std::nullopt, std::nullopt));
+  out.push_back(make_waypoint(x2, y2, psi2, 0.0, tol_mid, false, std::nullopt, std::nullopt));
+  out.push_back(make_waypoint(x3, y3, psi3, 0.0, std::max(2.0, tol_mid), false, std::nullopt, std::nullopt));
+  return out;
+}
+
+void apply_special_maneuver(ScenarioSpec* s) {
+  if (s->special_maneuver.empty() || s->special_maneuver == "none") {
+    return;
+  }
+  if (s->special_maneuver == "williamson") {
+    s->waypoints = build_williamson_waypoints(*s);
+    return;
+  }
+  throw std::runtime_error("Unknown special_maneuver: " + s->special_maneuver);
+}
+
 Waypoint parse_waypoint(const std::string& value) {
   const auto t = split_csv(value);
   if (t.size() < 2) {
@@ -107,6 +231,47 @@ Waypoint parse_waypoint(const std::string& value) {
   if (t.size() > 6) wp.w_wp = parse_opt_double(t[6]);
   if (t.size() > 7) wp.hit_scale = parse_opt_double(t[7]);
   return wp;
+}
+
+ShipKinematics parse_ship_kinematics(const std::vector<std::string>& t, int start_idx) {
+  if (static_cast<int>(t.size()) < start_idx + 4) {
+    throw std::runtime_error("ship requires x,y,course_deg,speed");
+  }
+
+  ShipKinematics kin;
+  kin.x = parse_double(t[start_idx + 0]);
+  kin.y = parse_double(t[start_idx + 1]);
+  kin.course = parse_double(t[start_idx + 2]) * M_PI / 180.0;
+  kin.speed = parse_double(t[start_idx + 3]);
+  return kin;
+}
+
+OwnShip parse_own_ship(const std::string& value) {
+  const auto t = split_csv(value);
+  if (t.size() < 5) {
+    throw std::runtime_error("own_ship requires name,x,y,course_deg,speed[,length,beam]");
+  }
+
+  OwnShip ship;
+  ship.name = t[0];
+  ship.state = parse_ship_kinematics(t, 1);
+  if (t.size() > 5) ship.length = parse_double(t[5]);
+  if (t.size() > 6) ship.beam = parse_double(t[6]);
+  return ship;
+}
+
+TargetShip parse_target_ship(const std::string& value) {
+  const auto t = split_csv(value);
+  if (t.size() < 5) {
+    throw std::runtime_error("target_ship requires id,x,y,course_deg,speed[,length,beam]");
+  }
+
+  TargetShip ship;
+  ship.id = t[0];
+  ship.state = parse_ship_kinematics(t, 1);
+  if (t.size() > 5) ship.length = parse_double(t[5]);
+  if (t.size() > 6) ship.beam = parse_double(t[6]);
+  return ship;
 }
 
 CircleObstacle parse_circle_obstacle(const std::string& value) {
@@ -204,6 +369,12 @@ void set_key_value(ScenarioSpec* s, const std::string& key_in, const std::string
   else if (key == "enable_terminal_k_hard") s->cfg.enable_terminal_K_hard = parse_bool(value);
   else if (key == "ipopt_max_iter") s->cfg.ipopt_max_iter = parse_int(value);
   else if (key == "ipopt_tol") s->cfg.ipopt_tol = parse_double(value);
+  else if (key == "nlp_solver" || key == "solver") s->cfg.nlp_solver = lower(trim(value));
+  else if (key == "realtime_mode") s->cfg.realtime_mode = parse_bool(value);
+  else if (key == "fatrop_structure_detection") s->cfg.fatrop_structure_detection = lower(trim(value));
+  else if (key == "fatrop_debug") s->cfg.fatrop_debug = parse_bool(value);
+  else if (key == "fatrop_convexify_strategy") s->cfg.fatrop_convexify_strategy = lower(trim(value));
+  else if (key == "fatrop_convexify_margin") s->cfg.fatrop_convexify_margin = parse_double(value);
   else if (key == "block_lengths_kcmd") s->cfg.block_lengths_Kcmd = parse_int_list(value);
   else if (key == "block_lengths_ds") s->cfg.block_lengths_ds = parse_int_list(value);
   else if (key == "w_prog") s->cfg.w_prog = parse_double(value);
@@ -231,6 +402,17 @@ void set_key_value(ScenarioSpec* s, const std::string& key_in, const std::string
   else if (key == "obstacle_clearance") s->opts.obstacle_clearance = parse_double(value);
   else if (key == "obstacle_trigger_margin") s->opts.obstacle_trigger_margin = parse_double(value);
   else if (key == "obstacle_waypoint_tol") s->opts.obstacle_waypoint_tol = parse_double(value);
+  else if (key == "colreg_only") s->colreg_only = parse_bool(value);
+  else if (key == "colreg_risk_dcpa") s->colreg_cfg.risk_dcpa = parse_double(value);
+  else if (key == "colreg_max_tcpa") s->colreg_cfg.max_tcpa = parse_double(value);
+  else if (key == "colreg_alpha_crit_13_deg") s->colreg_cfg.alpha_crit_13_deg = parse_double(value);
+  else if (key == "colreg_alpha_crit_14_deg") s->colreg_cfg.alpha_crit_14_deg = parse_double(value);
+  else if (key == "colreg_alpha_crit_15_deg") s->colreg_cfg.alpha_crit_15_deg = parse_double(value);
+  else if (key == "colreg_overtaking_sector_deg") s->colreg_cfg.overtaking_sector_deg = parse_double(value);
+  else if (key == "colreg_crossing_sector_deg") s->colreg_cfg.crossing_sector_deg = parse_double(value);
+  else if (key == "special_maneuver" || key == "maneuver") s->special_maneuver = lower(trim(value));
+  else if (key == "turn_dir" || key == "turn_direction") s->turn_dir = lower(trim(value));
+  else if (key == "maneuver_radius" || key == "williamson_radius") s->maneuver_radius = parse_double(value);
 
   else {
     throw std::runtime_error("Unknown key in scenario file: " + key);
@@ -273,6 +455,13 @@ ScenarioSpec make_default_scenario() {
   s.opts.w_wp_final = 1.0;
   s.opts.use_wp_kf = true;
   s.opts.kf_fallback = 0.0;
+  s.colreg_cfg.risk_dcpa = 0.5;
+  s.colreg_cfg.max_tcpa = 20.0;
+  s.colreg_cfg.alpha_crit_13_deg = 45.0;
+  s.colreg_cfg.alpha_crit_14_deg = 13.0;
+  s.colreg_cfg.alpha_crit_15_deg = 10.0;
+  s.colreg_cfg.overtaking_sector_deg = 112.5;
+  s.colreg_cfg.crossing_sector_deg = 112.5;
 
   return s;
 }
@@ -289,6 +478,8 @@ ScenarioSpec load_scenario_ini(const std::string& path) {
   std::string line;
   int line_no = 0;
   bool saw_waypoint = false;
+  bool saw_colreg_preset = false;
+  bool saw_explicit_colreg_ships = false;
 
   while (std::getline(ifs, line)) {
     ++line_no;
@@ -318,6 +509,40 @@ ScenarioSpec load_scenario_ini(const std::string& path) {
       s.waypoints.push_back(parse_waypoint(value));
       continue;
     }
+    if (key_l == "colreg_scenario" || key_l == "colreg_preset") {
+      if (saw_explicit_colreg_ships) {
+        throw std::runtime_error(
+            path + ":" + std::to_string(line_no) +
+            " -> colreg_scenario cannot be combined with explicit own_ship/target_ship entries.");
+      }
+      const EncounterScenario preset = make_colreg_scenario_by_name(lower(trim(value)));
+      s.colreg_only = true;
+      s.own_ship = preset.own_ship;
+      s.target_ships.clear();
+      s.target_ships.push_back(preset.target_ship);
+      saw_colreg_preset = true;
+      continue;
+    }
+    if (key_l == "own_ship") {
+      if (saw_colreg_preset) {
+        throw std::runtime_error(
+            path + ":" + std::to_string(line_no) +
+            " -> own_ship cannot be combined with colreg_scenario preset selection.");
+      }
+      s.own_ship = parse_own_ship(value);
+      saw_explicit_colreg_ships = true;
+      continue;
+    }
+    if (key_l == "target_ship") {
+      if (saw_colreg_preset) {
+        throw std::runtime_error(
+            path + ":" + std::to_string(line_no) +
+            " -> target_ship cannot be combined with colreg_scenario preset selection.");
+      }
+      s.target_ships.push_back(parse_target_ship(value));
+      saw_explicit_colreg_ships = true;
+      continue;
+    }
     if (key_l == "obstacle" || key_l == "circle_obstacle") {
       s.opts.obstacles.push_back(parse_circle_obstacle(value));
       continue;
@@ -336,9 +561,17 @@ ScenarioSpec load_scenario_ini(const std::string& path) {
     }
   }
 
-  if (s.waypoints.empty()) {
+  if (s.waypoints.empty() && !s.colreg_only) {
     throw std::runtime_error("Scenario must define at least one waypoint.");
   }
+  if (s.colreg_only && !s.own_ship.has_value()) {
+    throw std::runtime_error("COLREG-only scenario must define own_ship.");
+  }
+  if (s.colreg_only && s.target_ships.empty()) {
+    throw std::runtime_error("COLREG-only scenario must define at least one target_ship.");
+  }
+
+  apply_special_maneuver(&s);
 
   return s;
 }

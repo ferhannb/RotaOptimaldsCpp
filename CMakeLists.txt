@@ -44,6 +44,8 @@ message(STATUS "CASADI_LIBRARY=${CASADI_LIBRARY}")
 
 add_executable(rota_optimal_ds
   src/main.cpp
+  src/colreg_classifier.cpp
+  src/colreg_scenarios.cpp
   src/rota_optimal_ds.cpp
   src/obstacle_avoidance.cpp
   src/scenario_parser.cpp

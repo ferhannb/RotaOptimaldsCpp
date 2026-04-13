@@ -83,6 +83,162 @@ Obstacle-avoidance result:
 
 ![C++ obstacle scenario](docs/plot_obstacle_example.png)
 
+## COLREG Scenarios
+
+The C++ side now includes a small COLREG encounter module for category-V style vessel encounters:
+
+- head-on
+- crossing starboard
+- crossing port
+- own-ship overtaking
+- target-ship overtaking
+
+The encounter classifier is based on the Woerner et al. paper used in this repository workstream:
+
+- Kyle Woerner, Michael R. Benjamin, Michael Novitzky, John J. Leonard, "Quantifying protocol evaluation for autonomous collision avoidance: Toward establishing COLREGS compliance metrics," Autonomous Robots, 43, 967-991, 2019.
+- DOI: `10.1007/s10514-018-9765-y`
+
+- initial relative bearing `beta`
+- contact angle `alpha`
+- CPA / TCPA risk gating
+- Rule 13 / 14 / 15 entry geometry
+
+More specifically, the current implementation follows the paper's encounter-entry framing for:
+
+- Rule 13 overtaking geometry
+- Rule 14 head-on geometry
+- Rule 15 crossing geometry
+- use of `alpha`, `beta`, and CPA/TCPA-style risk interpretation
+
+This repository does not yet implement the full scoring/evaluation framework from the paper. The current COLREG module focuses on encounter classification, preset scenario generation, scan logging, and visualization.
+
+The implementation distinguishes two views of an encounter:
+
+- `geometry_type`: the instantaneous geometry at the current time step
+- `type`: a stateful tracked encounter family used during scan / animation so the encounter does not disappear immediately at CPA
+
+### Scenario Selection
+
+Use the central preset file:
+
+- [`scenarios/colreg_runner.ini`](scenarios/colreg_runner.ini)
+
+Change only this line:
+
+```ini
+colreg_scenario = head_on
+```
+
+Available values:
+
+- `head_on`
+- `crossing_starboard`
+- `crossing_port`
+- `own_ship_overtaking`
+- `target_ship_overtaking`
+
+The same `.ini` also contains the default COLREG thresholds:
+
+- `colreg_risk_dcpa`
+- `colreg_max_tcpa`
+- `colreg_alpha_crit_13_deg`
+- `colreg_alpha_crit_14_deg`
+- `colreg_alpha_crit_15_deg`
+- `colreg_overtaking_sector_deg`
+- `colreg_crossing_sector_deg`
+
+Important:
+
+- `colreg_scenario` preset mode is mutually exclusive with manual `own_ship` / `target_ship` entries
+- `colreg_only = true` runs classification-only scenarios without MPC waypoint tracking
+
+### Terminal Usage
+
+Run the currently selected COLREG preset:
+
+```bash
+./build/rota_optimal_ds --scenario scenarios/colreg_runner.ini
+```
+
+Run a time scan with constant-velocity propagation:
+
+```bash
+./build/rota_optimal_ds \
+  --scenario scenarios/colreg_runner.ini \
+  --colreg-scan \
+  --scan-dt 0.5 \
+  --scan-steps 80 \
+  --out-colreg-log colreg_scan.csv
+```
+
+The scan CSV contains both:
+
+- tracked encounter fields: `type`, `role`
+- instantaneous geometry fields: `geometry_type`, `geometry_role`
+
+### Static Visualization
+
+Generate a static COLREG geometry plot:
+
+```bash
+python3 plot_colreg_scenario.py --scenario scenarios/colreg_runner.ini
+```
+
+Save it to file:
+
+```bash
+python3 plot_colreg_scenario.py \
+  --scenario scenarios/colreg_runner.ini \
+  --save docs/colreg_head_on.png \
+  --no-show
+```
+
+### Animation
+
+Animate the currently selected preset:
+
+```bash
+python3 animate_colreg_scenario.py --scenario scenarios/colreg_runner.ini
+```
+
+Slower animation:
+
+```bash
+python3 animate_colreg_scenario.py \
+  --scenario scenarios/colreg_runner.ini \
+  --interval-ms 350 \
+  --fps 4
+```
+
+Save a GIF:
+
+```bash
+python3 animate_colreg_scenario.py \
+  --scenario scenarios/colreg_runner.ini \
+  --save docs/colreg_runner.gif \
+  --no-show
+```
+
+By default, the animation shows the approach phase only. Use `--full-window` if you also want the post-CPA separation phase.
+
+### Example Outputs
+
+Head-on static geometry:
+
+![COLREG head-on static view](docs/colreg_head_on.png)
+
+Crossing-starboard static geometry:
+
+![COLREG crossing-starboard static view](docs/colreg_crossing_starboard.png)
+
+Crossing-starboard approach animation:
+
+![COLREG crossing-starboard approach animation](docs/colreg_crossing_starboard_approach.gif)
+
+Head-on stateful tracked animation:
+
+![COLREG head-on stateful animation](docs/colreg_runner_head_on_stateful.gif)
+
 ## Python Version
 
 The Python-specific guide is here:
