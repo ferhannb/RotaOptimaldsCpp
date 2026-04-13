@@ -115,7 +115,7 @@ Benchmark scenario used in the example figures below:
 Benchmark hardware used for the figures below:
 
 - CPU: 11th Gen Intel Core i7-11800H @ 2.30 GHz
-- RAM: 15 GiB visible to the OS
+- RAM: 16 GB
 
 Trajectory overlay command:
 
