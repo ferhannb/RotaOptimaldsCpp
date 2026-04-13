@@ -89,6 +89,13 @@ The Python-specific guide is here:
 
 [`RotaOptimaldsPy/README.md`](RotaOptimaldsPy/README.md)
 
+The repository also contains a `python-version` branch for Python-side development and integration work. That branch has been used to develop and document:
+
+- the Python `acados` backend alongside the existing Python `CasADi` backend
+- trajectory-overlay plots for `CasADi` vs `acados`
+- solver-speed comparison tooling and benchmark figures
+- Python-specific README updates covering setup, running, plotting, and benchmark reproduction
+
 Quick start:
 
 ```bash
