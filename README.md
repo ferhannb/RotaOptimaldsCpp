@@ -27,7 +27,7 @@ Repository layout:
 - `RotaOptimaldsPy/docs/`: Python plots and benchmark figures
 
 Contribution notes are in [CONTRIBUTING.md](CONTRIBUTING.md).
-The project is released under the [MIT License](LICENSE).
+The project is released under the [GNU GPL v3.0](LICENSE).
 
 ## Quick Start
 
