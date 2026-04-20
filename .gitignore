@@ -1,8 +1,10 @@
 build/
+build_*/
 build_release/
 __pycache__/
 .vscode/
 .codex
 *.pyc
+colreg_scan.csv
 receding_log.csv
 waypoints.csv

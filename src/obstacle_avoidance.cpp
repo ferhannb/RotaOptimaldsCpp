@@ -124,17 +124,18 @@ std::optional<ObstacleAvoidanceCandidate> select_obstacle_detour_waypoint(
     if (r_detour > 1e-9) {
       const double k_mag = 1.0 / r_detour;
 
-      // Auto secimde aday WP score ile secilir; K isareti, rota WP'sinin
-      // secilen detour WP'ye gore sancak/iskele tarafinda kalmasina gore verilir.
+      // In auto mode, the candidate waypoint is chosen by score; the K sign is set
+      // from whether the route waypoint lies on the starboard or port side of the selected detour waypoint.
       const double psi_detour = std::atan2(detour.Y - y, detour.X - x);
       const double target_side = signed_turn_from_heading(
           detour.X, detour.Y, psi_detour, target_wp.X, target_wp.Y);
 
       if (std::abs(target_side) > 1e-9) {
-        // Rota WP detour WP'nin sancağinda ise K negatif, iskelesinde ise pozitif.
+        // If the route waypoint is on the starboard side of the detour waypoint, K is negative;
+        // if it is on the port side, K is positive.
         kf_detour = (target_side < 0.0) ? -k_mag : k_mag;
       } else {
-        // Degenerate durumda onceki yon sinyalini kullan.
+        // In degenerate cases, keep the previous direction sign.
         kf_detour = (turn_sign >= 0.0) ? k_mag : -k_mag;
       }
     }

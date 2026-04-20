@@ -52,6 +52,12 @@ struct MPCConfig {
 
   int ipopt_max_iter = 2000;
   double ipopt_tol = 1e-6;
+  std::string nlp_solver = "auto";
+  bool realtime_mode = false;
+  std::string fatrop_structure_detection = "none";
+  bool fatrop_debug = false;
+  std::string fatrop_convexify_strategy = "none";
+  double fatrop_convexify_margin = 1e-7;
 
   std::vector<int> block_lengths_Kcmd;
   std::vector<int> block_lengths_ds;
@@ -183,11 +189,19 @@ class MPCNumericClothoidCost {
   int NBd_ = 0;
 
   casadi::Opti opti_;
+  casadi::Function fatrop_solver_;
   casadi::MX X_;
   casadi::MX Kcmd_;
   casadi::MX ds_;
-  std::optional<casadi::MX> KcmdB_;
-  std::optional<casadi::MX> dsB_;
+  std::vector<casadi::MX> X_stage_;
+  std::vector<casadi::MX> Kcmd_stage_;
+  std::vector<casadi::MX> ds_stage_;
+  std::vector<int> fatrop_x_offset_;
+  std::vector<int> fatrop_u_offset_;
+  std::vector<double> fatrop_lbx_;
+  std::vector<double> fatrop_ubx_;
+  std::vector<double> fatrop_lbg_;
+  std::vector<double> fatrop_ubg_;
 
   casadi::MX x0_p_;
   casadi::MX y0_p_;
@@ -212,6 +226,9 @@ class MPCNumericClothoidCost {
   WarmStartData last_warm_;
   double last_ds_applied_ = 0.0;
   double last_solve_time_s_ = 0.0;
+  bool fatrop_plugin_known_missing_ = false;
+  bool fatrop_solver_failed_ = false;
+  bool fatrop_solver_built_ = false;
 
   static casadi::MX wrap_to_pi(const casadi::MX& a);
   static casadi::MX sinc(const casadi::MX& x);
@@ -257,10 +274,62 @@ class MPCNumericClothoidCost {
       double eps = 1e-9);
 
   void compute_block_maps();
-  std::vector<double> block_init_from_full(
-      const std::vector<double>& values,
-      const std::vector<int>& blk_map,
-      int n_blocks) const;
+  void configure_ipopt();
+  void configure_fatrop();
+  void configure_sqpmethod();
+  void configure_primary_solver();
+  void build_fatrop_solver();
+  void set_opti_initial_from_warm(const WarmStartData& ws);
+  WarmStartData make_warm_start_data(
+      double x0,
+      double y0,
+      double psi0,
+      double K0,
+      double xg,
+      double yg,
+      double psig,
+      bool use_last_warm,
+      std::optional<double> ds_seed) const;
+  std::vector<double> make_param_vector(
+      double x0,
+      double y0,
+      double psi0,
+      double K0,
+      double xg,
+      double yg,
+      double psig,
+      double Kf,
+      double xhit,
+      double yhit,
+      double psihit,
+      double Khit,
+      double hit_scale,
+      double ds_prev,
+      double term_scale,
+      double w_wp,
+      double xwp,
+      double ywp) const;
+  std::optional<MPCSolution> solve_with_fatrop(
+      double x0,
+      double y0,
+      double psi0,
+      double K0,
+      double xg,
+      double yg,
+      double psig,
+      double Kf,
+      double term_scale,
+      double w_wp,
+      double xwp,
+      double ywp,
+      double xhit,
+      double yhit,
+      double psihit,
+      double Khit,
+      double hit_scale,
+      double ds_prev,
+      const WarmStartData& warm,
+      std::string* msg);
 
   void build_solver();
   void set_params(
@@ -290,6 +359,7 @@ class MPCNumericClothoidCost {
       double K0,
       double xg,
       double yg,
+      double psig,
       std::optional<double> ds_seed);
 
   void apply_warm_start(
@@ -299,6 +369,7 @@ class MPCNumericClothoidCost {
       double K0,
       double xg,
       double yg,
+      double psig,
       bool use_last_warm,
       std::optional<double> ds_seed);
 

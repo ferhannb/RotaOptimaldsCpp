@@ -1,57 +1,86 @@
 # RotaOptimalds
 
-This repository contains two implementations of the same MPC-based route optimization workflow:
+RotaOptimalds is a curvature-aware model predictive control framework for vessel route optimization. It combines waypoint tracking, obstacle-aware rerouting, and COLREG encounter classification in a scenario-driven workflow with both C++ and Python implementations.
 
-- `src/` and the CMake build: C++ / CasADi implementation
-- `RotaOptimaldsPy/`: Python implementation with both `CasADi` and `acados` backends
+![Default route optimization result](docs/plot_default_scenario.png)
 
-Both versions use the same overall idea:
+## Why This Repository Is Useful
 
-- receding-horizon nonlinear MPC
-- waypoint tracking with heading and curvature targets
-- clothoid-like planar propagation
-- optional circular-obstacle detour waypoint generation
-- CSV logging and plotting
+- solves waypoint-following as a receding-horizon nonlinear MPC problem
+- keeps curvature and steering smoothness inside the planning model instead of post-processing them afterward
+- supports circular-obstacle detour waypoint generation
+- includes preset COLREG encounter scenarios and scan logging
+- provides both a C++ / CasADi implementation and a Python port with `casadi` and `acados` backends
 
-## Modeling View
+## Choose Your Entry Point
 
-The controller is built around a curvilinear geometric representation of motion so that maneuverability limits appear directly inside the planning variables, instead of being pushed afterward to a low-level tracker.
+- use the Python version if you want the fastest path to a reproducible demo
+- use the C++ version if you want the compiled solver workflow around the main implementation
 
-In that view, the path is parameterized by arc length `s` and curvature `kappa(s)`, not by time alone. This makes vessel feasibility much easier to encode: minimum turning radius becomes a curvature bound, and speed affects timing through `ds` rather than changing the geometric meaning of the path itself. This repository adopts that logic in an MPC form that is practical for repeated closed-loop solving.
-
-- The predicted state is carried with `x`, `y`, heading-like angle `psi`, and curvature `K`.
-- The optimizer chooses `Kcmd` and the spatial increment `ds`, so path progression is itself part of the optimization.
-- Curvature is not treated as a cosmetic smoothing variable; it is part of the internal model and directly determines how the vessel turns from one prediction stage to the next.
-- The update from one stage to the next is computed with a clothoid-like, sinc-regularized spatial propagation so that nearly straight and curved motion are handled by one continuous formula.
-
-Conceptually, the model starts from the curvilinear relations `dx/ds = cos(chi)`, `dy/ds = sin(chi)`, and `dchi/ds = kappa(s)`. In this repository, that idea is encapsulated in a control-oriented implementation where `psi` and `K` are propagated explicitly, and the next curvature is obtained through a slew-rate-limited command law. This is the practical bridge between geometric path description and implementable vessel motion prediction.
-
-The cost function is built around that same philosophy:
-
-- terminal and waypoint-related position errors are penalized so the optimizer still reaches the desired route in Cartesian space
-- heading and terminal curvature targets are penalized so geometric arrival conditions remain meaningful
-- curvature effort `K`, curvature command effort `Kcmd`, and command variation are regularized to avoid aggressive steering profiles
-- `ds` smoothness is penalized so spatial progression does not oscillate from one stage to the next
-
-The constraints are also curvilinear in spirit:
-
-- curvature bounds encode turning-radius feasibility
-- slew-rate limits on curvature changes encode steering-rate limitations
-- lower and upper bounds on `ds`, together with optional `ds` jump limits, keep spatial advancement physically reasonable
-- obstacle handling is implemented at the route level through temporary detour waypoints, then refined by the same curvature-aware MPC model
-
-The result is that the optimizer does not merely fit a Cartesian curve through waypoints. It constructs a dynamically consistent motion primitive in which geometry, steering smoothness, and feasible vessel turning behavior are solved together inside the prediction model.
-
-## Repository Layout
+Repository layout:
 
 - `src/`: C++ solver source
 - `scenarios/`: C++ scenario files
-- `docs/`: C++ example outputs
+- `docs/`: example plots and GIFs
 - `RotaOptimaldsPy/`: Python port
-- `RotaOptimaldsPy/scenarios/`: Python scenario files
-- `RotaOptimaldsPy/docs/`: Python example plots
+- `RotaOptimaldsPy/scenarios/`: Python scenarios
+- `RotaOptimaldsPy/docs/`: Python plots and benchmark figures
 
-## C++ Version
+Contribution notes are in [CONTRIBUTING.md](CONTRIBUTING.md).
+The project is released under the [MIT License](LICENSE).
+
+## Quick Start
+
+### Python Demo
+
+This is the easiest way to reproduce a result from the repository.
+
+Requirements:
+
+- Python 3.10+
+- `pip`
+- `casadi`, `numpy`, `matplotlib`
+- optional: a working `acados` installation if you want the `acados` backend
+
+Setup:
+
+```bash
+cd RotaOptimaldsPy
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Run the default scenario:
+
+```bash
+python3 main.py
+```
+
+Run a specific scenario:
+
+```bash
+python3 main.py --solver casadi --scenario scenarios/rotaoptimalds_obstacle_alt.ini
+```
+
+Plot the result:
+
+```bash
+python3 plot_receding.py \
+  --log receding_log.csv \
+  --wp waypoints.csv \
+  --scenario scenarios/rotaoptimalds_default.ini
+```
+
+Python backend details are documented in [RotaOptimaldsPy/README.md](RotaOptimaldsPy/README.md).
+
+### C++ Demo
+
+Requirements:
+
+- CMake 3.16+
+- a C++17 compiler
+- CasADi C++ headers and library installed locally
 
 Build from the repository root:
 
@@ -60,32 +89,58 @@ cmake -S . -B build
 cmake --build build -j
 ```
 
-Run a C++ scenario:
+If CMake cannot find CasADi automatically, point it at your CasADi installation:
+
+```bash
+cmake -S . -B build -DCASADI_ROOT=/path/to/casadi
+cmake --build build -j
+```
+
+Run the default scenario:
 
 ```bash
 ./build/rota_optimal_ds --scenario scenarios/rotaoptimalds_default.ini
 ```
 
-Plot a C++ run with the plotting script:
+Run the obstacle scenario:
 
 ```bash
-python3 RotaOptimaldsPy/plot_receding.py \
+./build/rota_optimal_ds --scenario scenarios/rotaoptimalds_obstacle.ini
+```
+
+Plot the result:
+
+```bash
+python3 plot_receding.py \
   --log receding_log.csv \
   --wp waypoints.csv \
   --scenario scenarios/rotaoptimalds_default.ini
 ```
 
-Default closed-loop result:
+## Example Outputs
 
-![C++ default scenario](docs/plot_default_scenario.png)
+Obstacle-aware route result:
 
-Obstacle-avoidance result:
+![Obstacle scenario](docs/plot_obstacle_example.png)
 
-![C++ obstacle scenario](docs/plot_obstacle_example.png)
+COLREG crossing-starboard animation:
+
+![COLREG crossing starboard](docs/colreg_crossing_starboard.gif)
+
+## Main Capabilities
+
+- receding-horizon nonlinear MPC
+- waypoint tracking with heading and curvature targets
+- clothoid-like spatial propagation with sinc regularization
+- curvature bounds and steering-rate limits
+- `ds` as an optimization variable
+- CSV logging for closed-loop analysis
+- static and animated plotting scripts
+- COLREG encounter classification with preset scenarios
 
 ## COLREG Scenarios
 
-The C++ side now includes a small COLREG encounter module for category-V style vessel encounters:
+The C++ side includes a COLREG encounter module for category-V style vessel encounters:
 
 - head-on
 - crossing starboard
@@ -93,37 +148,43 @@ The C++ side now includes a small COLREG encounter module for category-V style v
 - own-ship overtaking
 - target-ship overtaking
 
-The encounter classifier is based on the Woerner et al. paper used in this repository workstream:
+The current implementation focuses on:
 
-- Kyle Woerner, Michael R. Benjamin, Michael Novitzky, John J. Leonard, "Quantifying protocol evaluation for autonomous collision avoidance: Toward establishing COLREGS compliance metrics," Autonomous Robots, 43, 967-991, 2019.
-- DOI: `10.1007/s10514-018-9765-y`
+- encounter classification
+- preset scenario generation
+- constant-velocity scan logging
+- static visualization and GIF generation
 
-- initial relative bearing `beta`
-- contact angle `alpha`
-- CPA / TCPA risk gating
-- Rule 13 / 14 / 15 entry geometry
+Run the active COLREG preset:
 
-More specifically, the current implementation follows the paper's encounter-entry framing for:
+```bash
+./build/rota_optimal_ds --scenario scenarios/colreg_runner.ini
+```
 
-- Rule 13 overtaking geometry
-- Rule 14 head-on geometry
-- Rule 15 crossing geometry
-- use of `alpha`, `beta`, and CPA/TCPA-style risk interpretation
+Run a COLREG time scan:
 
-This repository does not yet implement the full scoring/evaluation framework from the paper. The current COLREG module focuses on encounter classification, preset scenario generation, scan logging, and visualization.
+```bash
+./build/rota_optimal_ds \
+  --scenario scenarios/colreg_runner.ini \
+  --colreg-scan \
+  --scan-dt 0.5 \
+  --scan-steps 80 \
+  --out-colreg-log colreg_scan.csv
+```
 
-The implementation distinguishes two views of an encounter:
+Generate a static plot:
 
-- `geometry_type`: the instantaneous geometry at the current time step
-- `type`: a stateful tracked encounter family used during scan / animation so the encounter does not disappear immediately at CPA
+```bash
+python3 plot_colreg_scenario.py --scenario scenarios/colreg_runner.ini
+```
 
-### Scenario Selection
+Generate an animation:
 
-Use the central preset file:
+```bash
+python3 animate_colreg_scenario.py --scenario scenarios/colreg_runner.ini
+```
 
-- [`scenarios/colreg_runner.ini`](scenarios/colreg_runner.ini)
-
-Change only this line:
+Preset selection is controlled in [`scenarios/colreg_runner.ini`](scenarios/colreg_runner.ini) via:
 
 ```ini
 colreg_scenario = head_on
@@ -137,142 +198,52 @@ Available values:
 - `own_ship_overtaking`
 - `target_ship_overtaking`
 
-The same `.ini` also contains the default COLREG thresholds:
+## Modeling View
 
-- `colreg_risk_dcpa`
-- `colreg_max_tcpa`
-- `colreg_alpha_crit_13_deg`
-- `colreg_alpha_crit_14_deg`
-- `colreg_alpha_crit_15_deg`
-- `colreg_overtaking_sector_deg`
-- `colreg_crossing_sector_deg`
+The planner is built around a curvilinear motion description rather than treating geometry as a post-processing step.
 
-Important:
+- the predicted state uses `x`, `y`, `psi`, and curvature `K`
+- the optimizer chooses curvature command `Kcmd` and spatial increment `ds`
+- turning-radius feasibility appears as curvature bounds
+- steering smoothness appears as slew-rate limits and cost regularization
 
-- `colreg_scenario` preset mode is mutually exclusive with manual `own_ship` / `target_ship` entries
-- `colreg_only = true` runs classification-only scenarios without MPC waypoint tracking
+Conceptually, this follows the curvilinear relations `dx/ds = cos(chi)`, `dy/ds = sin(chi)`, and `dchi/ds = kappa(s)` and turns them into a repeated MPC solve that is practical for closed-loop route generation.
 
-### Terminal Usage
+## Python Benchmark Path
 
-Run the currently selected COLREG preset:
+The Python port supports:
 
-```bash
-./build/rota_optimal_ds --scenario scenarios/colreg_runner.ini
-```
+- `casadi`: reference Python NLP implementation
+- `acados`: faster backend for the same MPC structure
 
-Run a time scan with constant-velocity propagation:
+Typical comparison workflow:
 
 ```bash
-./build/rota_optimal_ds \
-  --scenario scenarios/colreg_runner.ini \
-  --colreg-scan \
-  --scan-dt 0.5 \
-  --scan-steps 80 \
-  --out-colreg-log colreg_scan.csv
-```
-
-The scan CSV contains both:
-
-- tracked encounter fields: `type`, `role`
-- instantaneous geometry fields: `geometry_type`, `geometry_role`
-
-### Static Visualization
-
-Generate a static COLREG geometry plot:
-
-```bash
-python3 plot_colreg_scenario.py --scenario scenarios/colreg_runner.ini
-```
-
-Save it to file:
-
-```bash
-python3 plot_colreg_scenario.py \
-  --scenario scenarios/colreg_runner.ini \
-  --save docs/colreg_head_on.png \
+cd RotaOptimaldsPy
+python3 main.py --solver casadi --scenario scenarios/rotaoptimalds_obstacle_alt.ini
+python3 main.py --solver acados --scenario scenarios/rotaoptimalds_obstacle_alt.ini
+python3 compare_solver_speed.py \
+  --scenario scenarios/rotaoptimalds_obstacle_alt.ini \
+  --save docs/solver_speed_comparison.png \
   --no-show
 ```
 
-### Animation
+Example benchmark figure:
 
-Animate the currently selected preset:
+![Solver speed comparison](RotaOptimaldsPy/docs/solver_speed_comparison.png)
 
-```bash
-python3 animate_colreg_scenario.py --scenario scenarios/colreg_runner.ini
-```
+## Current Scope
 
-Slower animation:
+This repository already demonstrates the main planning workflow well, but it is still best understood as a research and development codebase rather than a polished end-user application. The strongest audience fit is:
 
-```bash
-python3 animate_colreg_scenario.py \
-  --scenario scenarios/colreg_runner.ini \
-  --interval-ms 350 \
-  --fps 4
-```
+- MPC and optimal control developers
+- marine robotics and autonomous navigation researchers
+- people comparing `CasADi` and `acados` workflows
 
-Save a GIF:
+## Contributing
 
-```bash
-python3 animate_colreg_scenario.py \
-  --scenario scenarios/colreg_runner.ini \
-  --save docs/colreg_runner.gif \
-  --no-show
-```
+If you want outside contributions, create a few GitHub issues labeled `good first issue` and `help wanted`. The repo now includes a contribution guide and issue templates so new contributors have a clear starting point.
 
-By default, the animation shows the approach phase only. Use `--full-window` if you also want the post-CPA separation phase.
+## Suggested GitHub Topics
 
-### Example Outputs
-
-Head-on static geometry:
-
-![COLREG head-on static view](docs/colreg_head_on.png)
-
-Crossing-starboard static geometry:
-
-![COLREG crossing-starboard static view](docs/colreg_crossing_starboard.png)
-
-Crossing-starboard approach animation:
-
-![COLREG crossing-starboard approach animation](docs/colreg_crossing_starboard_approach.gif)
-
-Head-on stateful tracked animation:
-
-![COLREG head-on stateful animation](docs/colreg_runner_head_on_stateful.gif)
-
-## Python Version
-
-The Python-specific guide is here:
-
-[`RotaOptimaldsPy/README.md`](RotaOptimaldsPy/README.md)
-
-The repository also contains a `python-version` branch for Python-side development and integration work. That branch has been used to develop and document:
-
-- the Python `acados` backend alongside the existing Python `CasADi` backend
-- trajectory-overlay plots for `CasADi` vs `acados`
-- solver-speed comparison tooling and benchmark figures
-- Python-specific README updates covering setup, running, plotting, and benchmark reproduction
-
-Quick start:
-
-```bash
-python3 RotaOptimaldsPy/main.py --solver casadi --scenario RotaOptimaldsPy/scenarios/rotaoptimalds_default_alt.ini
-python3 RotaOptimaldsPy/main.py --solver acados --scenario RotaOptimaldsPy/scenarios/rotaoptimalds_obstacle_alt.ini
-```
-
-Python backend benchmark details and figures are documented in:
-
-- [`RotaOptimaldsPy/README.md`](RotaOptimaldsPy/README.md)
-
-That includes:
-
-- `CasADi` vs `acados` trajectory overlay
-- per-step solve-time comparison
-- commands used to reproduce the benchmark figures
-
-## Notes
-
-- The Python and C++ versions are algorithmically aligned, but small numerical differences may still appear because of runtime and solver details.
-- The Python version supports both a `CasADi` backend and an `acados` backend for the same MPC structure.
-- In Python, `acados` is expected to reduce solve time relative to `CasADi`, while still following the same scenario and controller structure.
-- `ds` is an optimization variable in both versions. It is not explicitly rewarded for staying large, so it can shrink near demanding turns, obstacle detours, or terminal conditions.
-- Obstacle avoidance is handled by temporary detour waypoints around circular obstacles rather than hard collision constraints inside the MPC problem.
+`mpc`, `model-predictive-control`, `casadi`, `acados`, `path-planning`, `collision-avoidance`, `marine-robotics`, `autonomous-systems`, `colreg`, `cpp`, `python`
