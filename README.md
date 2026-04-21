@@ -155,6 +155,48 @@ The current implementation focuses on:
 - constant-velocity scan logging
 - static visualization and GIF generation
 
+### Scenario Animations
+
+Each animation shows ship-shaped markers oriented to their heading, fading gradient trails, and live DCPA / TCPA metric panels. The background turns orange when COLREG risk is active.
+
+#### Head-On (Rule 14)
+
+![Head-On](docs/colreg_head_on.gif)
+
+#### Head-On + MPC Route
+
+![Head-On route](docs/colreg_head_on_route.gif)
+
+#### Crossing — Starboard (Rule 15, GiveWay)
+
+![Crossing starboard](docs/colreg_crossing_starboard.gif)
+
+#### Crossing — Starboard + MPC Route
+
+![Crossing starboard route](docs/colreg_crossing_starboard_route.gif)
+
+#### Crossing — Port (Rule 15, StandOn)
+
+![Crossing port](docs/colreg_crossing_port.gif)
+
+#### Crossing — Port + MPC Route
+
+![Crossing port route](docs/colreg_crossing_port_route.gif)
+
+#### Own Ship Overtaking (Rule 13)
+
+![Overtaking own](docs/colreg_overtaking_own.gif)
+
+#### Own Ship Being Overtaken (Rule 13)
+
+![Overtaken by target](docs/colreg_overtaken_by_target.gif)
+
+#### Runner (active scenario selector)
+
+![Runner](docs/colreg_runner.gif)
+
+### Running the Scenarios
+
 Run the active COLREG preset:
 
 ```bash
