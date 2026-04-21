@@ -123,10 +123,6 @@ Obstacle-aware route result:
 
 ![Obstacle scenario](docs/plot_obstacle_example.png)
 
-COLREG crossing-starboard animation:
-
-![COLREG crossing starboard](docs/colreg_crossing_starboard.gif)
-
 ## Main Capabilities
 
 - receding-horizon nonlinear MPC
